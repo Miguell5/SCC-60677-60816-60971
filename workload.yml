@@ -1,0 +1,149 @@
+config:
+  target: 'https://scc-backend-60677-60816-60971.azurewebsites.net/rest'
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+  processor: "./test-utils.js"
+  variables:
+    metricsProcessEndpoint : "myProcessEndpoint"  # function used to aggregate endpoints for statistics
+  phases:
+    - name: "Workload"
+      duration: 60
+      arrivalCount: 5
+
+
+
+scenarios:
+  - name: 'Question list ops'
+    weight: 1
+    flow:
+      - loop:
+        - function: "genNewUser" # Generate the needed information for the user
+        - post:
+            url: "/user/create"
+            headers:
+              Content-Type: application/json
+              Accept: application/json
+            json:
+              id: "{{ id }}"
+              name: "{{ name }}"
+              pwd: "{{ pwd }}"
+            afterResponse: "genNewUserReply"
+        - post:
+            url: "/user/auth"
+            headers:
+              Content-Type: application/json
+            json:
+              id: "{{ id }}"
+              pwd: "{{ pwd }}"
+        count: 1
+      - loop:
+          - get:
+              url: "/user/{{ id }}"
+              headers:
+                Accept: application/json
+              afterResponse: "genGetReply"
+        count: 5
+      - loop:
+          - function: "genNewHouse"         # Generate the needed information for the house
+          - post:
+              url: "/house/create"
+              headers:
+                Content-Type: application/json
+                Accept: application/json
+              json:
+                name: "{{ house_name }}"
+                location: "{{ location }}"
+                description: "{{ description }}"
+                ownerName: "{{ id }}"
+                normalPrice: "{{ cost }}"
+                promotionPrice: "{{ discount }}"
+                promotionIntervals: [ ]
+              capture:
+                json: "$.id"
+                as: "houseid"
+              afterResponse: "genNewHouseReply"
+          - loop:
+            - get:
+                url: "/house/{{ houseid }}"
+                headers:
+                  Accept: application/json
+            count: 2
+          - loop:
+            - function: "genNewQuestion"
+            - post:
+                url: "/question/house/{{ houseid }}/create"
+                headers:
+                  Content-Type: application/json
+                  Accept: application/json
+                json:
+                  questionMessage: "{{ questionMessage }}"
+                capture:
+                  json: "$.id"
+                  as: "questionid"
+                afterResponse: "genNewQuestionReply"
+            count: 3
+          - loop:
+            - get:
+                url: "/question/house/{{ houseid }}/list"
+                afterResponse: "genListQuestionsByHouseReply"
+            count: 2
+          - loop:
+              - get:
+                  url: "/question/listMy"
+                  afterResponse: "genListQuestionsByUserReply"
+            count: 2
+          - loop:
+              - function: "genNewRental"
+              - post:
+                  url: "/rental/house/{{ houseid }}/create"
+                  headers:
+                    Content-Type: application/json
+                    Accept: application/json
+                  json:
+                    startDate: "{{ startDate }}"
+                    endDate: "{{ endDate }}"
+                  capture:
+                    json: "$.id"
+                    as: "rentalid"
+                  afterResponse: "genNewRentalReply"
+            count: 3
+          - loop:
+              - get:
+                  url: "/rental/house/{{ houseid }}/list"
+                  afterResponse: "genListRentalsByHouseReply"
+            count: 3
+          - loop:
+              - get:
+                  url: "/rental/listMy"
+                  afterResponse: "genListRentalsByUserReply"
+            count: 2
+        count: 10
+      - loop:
+          - get:
+              url: "/house/{{ id }}/byUser"
+              afterResponse: "genListHousesByUserReply"
+        count: 2
+      - loop:
+          - get:
+              url: "/house/Algarve/byLocation"
+              afterResponse: "genListHousesByLocationReply"
+        count: 2
+      - loop:
+          - get:
+              url: "/house/Lisbon/byLocation"
+              afterResponse: "genListHousesByLocationReply"
+        count: 2
+      - loop:
+          - get:
+              url: "/house/Porto/byLocation"
+              afterResponse: "genListHousesByLocationReply"
+        count: 2
+      - loop:
+          - get:
+              url: "/house/Algarve/available?startDate=2023-11-21&endDate=2023-11-25"
+              afterResponse: "genListAvailableHousesByLocationReply"
+        count: 2
+
+
+

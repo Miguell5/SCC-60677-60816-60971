@@ -1,0 +1,89 @@
+config:
+  target: 'https://scc-backend-60677-60816-60971.azurewebsites.net/rest'
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+  processor: "./test-utils.js"
+  variables:
+    metricsProcessEndpoint : "myProcessEndpoint"  # function used to aggregate endpoints for statistics
+  phases:
+    - name: "Media test"
+      duration: 10
+      arrivalCount: 4
+
+
+
+scenarios:
+  - name: 'Media test'
+    weight: 1
+    flow:
+      - loop:
+        - function: "genNewUser" # Generate the needed information for the user
+        - post:
+            url: "/user/create"
+            headers:
+              Content-Type: application/json
+              Accept: application/json
+            json:
+              id: "{{ id }}"
+              name: "{{ name }}"
+              pwd: "{{ pwd }}"
+            afterResponse: "genNewUserReply"
+        - post:
+            url: "/user/auth"
+            headers:
+              Content-Type: application/json
+            json:
+              id: "{{ id }}"
+              pwd: "{{ pwd }}"
+        - function: "genNewHouse"         # Generate the needed information for the house
+        - post:
+            url: "/house/create"
+            headers:
+              Content-Type: application/json
+              Accept: application/json
+            json:
+              name: "{{ house_name }}"
+              location: "{{ location }}"
+              description: "{{ description }}"
+              ownerName: "{{ id }}"
+              normalPrice: "{{ cost }}"
+              promotionPrice: "{{ discount }}"
+              promotionIntervals: [ ]
+            capture:
+              json: "$.id"
+              as: "houseId" # capture the house id to be used in house creation
+            afterResponse: "genNewHouseReply"
+        - post:
+            url: "/media/house/{{ houseId }}/upload"
+            headers:
+              Content-Type: application/octet-stream
+              Accept: application/json
+            beforeRequest: "uploadImageBody"
+            capture: 
+              regexp: "(.+)"
+              as: "imageId" 
+        - post:
+            url: "/media/user/upload"
+            headers:
+              Content-Type: application/octet-stream
+              Accept: application/json
+            beforeRequest: "uploadImageBody"
+            afterResponse: "genMediaForUserReply"
+        - get:
+            url: "/media/user/{{ id }}/download"
+            headers:
+              Accept: application/octet-stream
+            afterResponse: "genMediaUserDownloadReply"
+        - delete:
+            url: "/media/user/delete"
+        - get:
+            url: "/media/{{ imageId }}/house/{{ houseId }}/download"
+            headers:
+              Accept: application/octet-stream
+        - delete:
+            url: "/media/{{ imageId }}/house/{{ houseId }}/delete"
+        count: 10
+
+
+
